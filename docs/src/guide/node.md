@@ -50,8 +50,6 @@ function logEvent(name, data) {
 }
 </script>
 
-# Introduction to Nodes
-
 Nodes are the underlying components of your graph.
 They can be any kind of data you want to visualize in your graph, existing independently and being interconnected
 through edges to create a data map.
@@ -63,6 +61,10 @@ For the full list of options available for a node, check out the [Node Interface
 ## Adding Nodes to the Graph
 
 Nodes are rendered by passing them to the `nodes` prop (or the deprecated `v-model` prop) of the Vue Flow component.
+
+:::warning
+This method will *not* create a change. Check out the [Controlled Flow](/guide/controlled-flow.html) section for more information.
+:::
 
 :::code-group
 
@@ -238,6 +240,11 @@ function onAddNodes() {
 ```
 
 :::
+
+::: info
+If you want to have two-way binding of nodes, use `v-model:nodes="nodes"`.
+This will allow you to mutate *your* nodes and have the changes reflected in the graph.
+::: 
 
 ## Removing Nodes from the Graph
 

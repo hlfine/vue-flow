@@ -1,19 +1,18 @@
 <script lang="ts" setup>
-import { ref, toRef } from 'vue'
+import { ref, toRef, watch } from 'vue'
 import UserSelection from '../../components/UserSelection/UserSelection.vue'
 import NodesSelection from '../../components/NodesSelection/NodesSelection.vue'
-import type { GraphNode } from '../../types'
+import type { NodeChange } from '../../types'
 import { SelectionMode } from '../../types'
 import { useKeyPress, useVueFlow } from '../../composables'
-import { getConnectedEdges, getNodesInside } from '../../utils'
+import { getEventPosition, getNodesInside, getSelectionChanges } from '../../utils'
 import { getMousePosition } from './utils'
 
-const { isSelecting } = defineProps<{ isSelecting: boolean }>()
+const { isSelecting, selectionKeyPressed } = defineProps<{ isSelecting: boolean; selectionKeyPressed: boolean }>()
 
 const {
   vueFlowRef,
   getNodes,
-  getEdges,
   viewport,
   emits,
   userSelectionActive,
@@ -22,7 +21,6 @@ const {
   userSelectionRect,
   elementsSelectable,
   nodesSelectionActive,
-  addSelectedElements,
   getSelectedEdges,
   getSelectedNodes,
   removeNodes,
@@ -31,6 +29,8 @@ const {
   deleteKeyCode,
   multiSelectionKeyCode,
   multiSelectionActive,
+  edgeLookup,
+  nodeLookup,
 } = useVueFlow()
 
 const container = ref<HTMLDivElement | null>(null)
@@ -41,44 +41,42 @@ const prevSelectedEdgesCount = ref(0)
 
 const containerBounds = ref<DOMRect>()
 
+const edgeIdLookup = ref<Map<string, Set<string>>>(new Map())
+
 const hasActiveSelection = toRef(() => elementsSelectable.value && (isSelecting || userSelectionActive.value))
 
-useKeyPress(
-  deleteKeyCode,
-  (keyPressed) => {
-    if (!keyPressed) {
+// Used to prevent click events when the user lets go of the selectionKey during a selection
+const selectionInProgress = ref(false)
+
+const deleteKeyPressed = useKeyPress(deleteKeyCode, { actInsideInputWithModifier: false })
+
+const multiSelectKeyPressed = useKeyPress(multiSelectionKeyCode)
+
+watch(deleteKeyPressed, (isKeyPressed) => {
+  if (!isKeyPressed) {
+    return
+  }
+
+  removeNodes(getSelectedNodes.value)
+
+  removeEdges(getSelectedEdges.value)
+
+  nodesSelectionActive.value = false
+})
+
+watch(multiSelectKeyPressed, (isKeyPressed) => {
+  multiSelectionActive.value = isKeyPressed
+})
+
+function wrapHandler(handler: Function, containerRef: HTMLDivElement | null) {
+  return (event: MouseEvent) => {
+    if (event.target !== containerRef) {
       return
     }
 
-    const nodesToRemove: GraphNode[] = []
-    for (const node of getNodes.value) {
-      if (!node.selected && node.parentNode && nodesToRemove.some((n) => n.id === node.parentNode)) {
-        nodesToRemove.push(node)
-      } else if (node.selected) {
-        nodesToRemove.push(node)
-      }
-    }
-
-    if (nodesToRemove || getSelectedEdges.value) {
-      if (getSelectedEdges.value.length > 0) {
-        removeEdges(getSelectedEdges.value)
-      }
-
-      if (nodesToRemove.length > 0) {
-        removeNodes(nodesToRemove)
-      }
-
-      nodesSelectionActive.value = false
-
-      removeSelectedElements()
-    }
-  },
-  { actInsideInputWithModifier: false },
-)
-
-useKeyPress(multiSelectionKeyCode, (keyPressed) => {
-  multiSelectionActive.value = keyPressed
-})
+    handler?.(event)
+  }
+}
 
 function resetUserSelection() {
   userSelectionActive.value = false
@@ -89,7 +87,8 @@ function resetUserSelection() {
 }
 
 function onClick(event: MouseEvent) {
-  if (event.target !== container.value || hasActiveSelection.value) {
+  if (selectionInProgress.value) {
+    selectionInProgress.value = false
     return
   }
 
@@ -101,10 +100,6 @@ function onClick(event: MouseEvent) {
 }
 
 function onContextMenu(event: MouseEvent) {
-  if (event.target !== container.value) {
-    return
-  }
-
   if (Array.isArray(panOnDrag.value) && panOnDrag.value?.includes(2)) {
     event.preventDefault()
     return
@@ -114,19 +109,15 @@ function onContextMenu(event: MouseEvent) {
 }
 
 function onWheel(event: WheelEvent) {
-  if (event.target !== container.value) {
-    return
-  }
-
   emits.paneScroll(event)
 }
 
-function onMouseDown(event: MouseEvent) {
-  containerBounds.value = vueFlowRef.value!.getBoundingClientRect()
+function onPointerDown(event: PointerEvent) {
+  containerBounds.value = vueFlowRef.value?.getBoundingClientRect()
+  container.value?.setPointerCapture(event.pointerId)
 
   if (
-    !hasActiveSelection.value ||
-    !elementsSelectable ||
+    !elementsSelectable.value ||
     !isSelecting ||
     event.button !== 0 ||
     event.target !== container.value ||
@@ -136,6 +127,13 @@ function onMouseDown(event: MouseEvent) {
   }
 
   const { x, y } = getMousePosition(event, containerBounds.value)
+
+  edgeIdLookup.value = new Map()
+
+  for (const [id, edge] of edgeLookup.value) {
+    edgeIdLookup.value.set(edge.source, edgeIdLookup.value.get(edge.source)?.add(id) || new Set([id]))
+    edgeIdLookup.value.set(edge.target, edgeIdLookup.value.get(edge.target)?.add(id) || new Set([id]))
+  }
 
   removeSelectedElements()
 
@@ -153,60 +151,71 @@ function onMouseDown(event: MouseEvent) {
   emits.selectionStart(event)
 }
 
-function onMouseMove(event: MouseEvent) {
-  if (!hasActiveSelection.value) {
-    return emits.paneMouseMove(event)
-  }
-
-  if (!isSelecting || !containerBounds.value || !userSelectionRect.value) {
+function onPointerMove(event: PointerEvent) {
+  if (!containerBounds.value || !userSelectionRect.value) {
     return
   }
 
-  if (!userSelectionActive.value) {
-    userSelectionActive.value = true
-  }
+  selectionInProgress.value = true
 
-  if (nodesSelectionActive.value) {
-    nodesSelectionActive.value = false
-  }
-
-  const mousePos = getMousePosition(event, containerBounds.value)
-  const startX = userSelectionRect.value.startX ?? 0
-  const startY = userSelectionRect.value.startY ?? 0
+  const { x: mouseX, y: mouseY } = getEventPosition(event, containerBounds.value)
+  const { startX = 0, startY = 0 } = userSelectionRect.value
 
   const nextUserSelectRect = {
-    ...userSelectionRect.value,
-    x: mousePos.x < startX ? mousePos.x : startX,
-    y: mousePos.y < startY ? mousePos.y : startY,
-    width: Math.abs(mousePos.x - startX),
-    height: Math.abs(mousePos.y - startY),
+    startX,
+    startY,
+    x: mouseX < startX ? mouseX : startX,
+    y: mouseY < startY ? mouseY : startY,
+    width: Math.abs(mouseX - startX),
+    height: Math.abs(mouseY - startY),
   }
 
   const selectedNodes = getNodesInside(
     getNodes.value,
-    userSelectionRect.value,
+    nextUserSelectRect,
     viewport.value,
     selectionMode.value === SelectionMode.Partial,
+    true,
   )
 
-  const selectedEdges = getConnectedEdges(selectedNodes, getEdges.value)
+  const selectedEdgeIds = new Set<string>()
+  const selectedNodeIds = new Set<string>()
 
-  prevSelectedNodesCount.value = selectedNodes.length
-  prevSelectedEdgesCount.value = selectedEdges.length
+  for (const selectedNode of selectedNodes) {
+    selectedNodeIds.add(selectedNode.id)
 
-  userSelectionRect.value = nextUserSelectRect
+    const edgeIds = edgeIdLookup.value.get(selectedNode.id)
 
-  addSelectedElements([...selectedNodes, ...selectedEdges])
-}
-
-function onMouseUp(event: MouseEvent) {
-  if (!hasActiveSelection.value) {
-    return
+    if (edgeIds) {
+      for (const edgeId of edgeIds) {
+        selectedEdgeIds.add(edgeId)
+      }
+    }
   }
 
+  if (prevSelectedNodesCount.value !== selectedNodeIds.size) {
+    prevSelectedNodesCount.value = selectedNodeIds.size
+    const changes = getSelectionChanges(nodeLookup.value, selectedNodeIds, true) as NodeChange[]
+    emits.nodesChange(changes)
+  }
+
+  if (prevSelectedEdgesCount.value !== selectedEdgeIds.size) {
+    prevSelectedEdgesCount.value = selectedEdgeIds.size
+    const changes = getSelectionChanges(edgeLookup.value, selectedEdgeIds)
+    emits.edgesChange(changes)
+  }
+
+  userSelectionRect.value = nextUserSelectRect
+  userSelectionActive.value = true
+  nodesSelectionActive.value = false
+}
+
+function onPointerUp(event: PointerEvent) {
   if (event.button !== 0) {
     return
   }
+
+  container.value?.releasePointerCapture(event.pointerId)
 
   // We only want to trigger click functions when in selection mode if
   // the user did not move the mouse.
@@ -219,27 +228,12 @@ function onMouseUp(event: MouseEvent) {
   resetUserSelection()
 
   emits.selectionEnd(event)
-}
 
-function onMouseLeave(event: MouseEvent) {
-  if (!hasActiveSelection.value) {
-    return emits.paneMouseLeave(event)
+  // If the user kept holding the selectionKey during the selection,
+  // we need to reset the selectionInProgress, so the next click event is not prevented
+  if (selectionKeyPressed) {
+    selectionInProgress.value = false
   }
-
-  if (userSelectionActive.value) {
-    nodesSelectionActive.value = prevSelectedNodesCount.value > 0
-    emits.selectionEnd?.(event)
-  }
-
-  resetUserSelection()
-}
-
-function onMouseEnter(event: MouseEvent) {
-  if (hasActiveSelection.value) {
-    return
-  }
-
-  emits.paneMouseEnter(event)
 }
 </script>
 
@@ -255,14 +249,14 @@ export default {
     ref="container"
     class="vue-flow__pane vue-flow__container"
     :class="{ selection: isSelecting }"
-    @click="onClick"
-    @contextmenu="onContextMenu"
-    @wheel.passive="onWheel"
-    @mouseenter="onMouseEnter"
-    @mousedown="onMouseDown"
-    @mousemove="onMouseMove"
-    @mouseup="onMouseUp"
-    @mouseleave="onMouseLeave"
+    @click="(event) => (hasActiveSelection ? undefined : wrapHandler(onClick, container)(event))"
+    @contextmenu="wrapHandler(onContextMenu, container)($event)"
+    @wheel.passive="wrapHandler(onWheel, container)($event)"
+    @pointerenter="(event) => (hasActiveSelection ? undefined : emits.paneMouseEnter(event))"
+    @pointerdown="(event) => (hasActiveSelection ? onPointerDown(event) : emits.paneMouseMove(event))"
+    @pointermove="(event) => (hasActiveSelection ? onPointerMove(event) : emits.paneMouseMove(event))"
+    @pointerup="(event) => (hasActiveSelection ? onPointerUp(event) : undefined)"
+    @pointerleave="emits.paneMouseLeave($event)"
   >
     <slot />
     <UserSelection v-if="userSelectionActive && userSelectionRect" :user-selection-rect="userSelectionRect" />

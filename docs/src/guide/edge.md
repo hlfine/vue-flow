@@ -79,8 +79,6 @@ function logEvent(name, data) {
 }
 </script>
 
-# Introduction to Edges
-
 Edges are the links connecting your nodes, forming a map.
 Each edge runs from one handle to another, and can be customized to your liking.
 
@@ -91,6 +89,10 @@ For the full list of options available for an edge, check out the [Edge Type](/t
 ## Adding Edges to the Graph
 
 Edges are rendered by passing them to the `edges` prop (or the deprecated `v-model` prop) of the Vue Flow component.
+
+:::warning
+This method will *not* create a change. Check out the [Controlled Flow](/guide/controlled-flow.html) section for more information.
+:::
 
 :::code-group
 

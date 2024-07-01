@@ -1,5 +1,41 @@
 # @vue-flow/core
 
+## 1.38.2
+
+### Patch Changes
+
+- [#1517](https://github.com/bcakmakoglu/vue-flow/pull/1517) [`d2ec752`](https://github.com/bcakmakoglu/vue-flow/commit/d2ec752ca404b58a26831849934628057b0109ca) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Use `post` flush timing to re-observe node size when toggling node visibility
+
+- [#1514](https://github.com/bcakmakoglu/vue-flow/pull/1514) [`6a0813e`](https://github.com/bcakmakoglu/vue-flow/commit/6a0813e525e8d24c1ca2888de97f66ac6e7de4c0) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Avoid re-snapping to the same handle
+
+## 1.38.1
+
+### Patch Changes
+
+- [#1510](https://github.com/bcakmakoglu/vue-flow/pull/1510) [`4643676`](https://github.com/bcakmakoglu/vue-flow/commit/4643676e689def1901fe171a4b78257db2089684) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Correct calculation of nodes inside selection rect
+
+## 1.38.0
+
+### Minor Changes
+
+- [#1492](https://github.com/bcakmakoglu/vue-flow/pull/1492) [`f85ea42`](https://github.com/bcakmakoglu/vue-flow/commit/f85ea42d591f75d714e864f9114ce3e22cd0cd99) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Allow passing event target to `useKeyPress`
+
+- [#1492](https://github.com/bcakmakoglu/vue-flow/pull/1492) [`f85ea42`](https://github.com/bcakmakoglu/vue-flow/commit/f85ea42d591f75d714e864f9114ce3e22cd0cd99) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Use pointer events to capture interactions on `Pane` cmp and prevent selections from being cancelled when moving outside of the `Pane` while holding selection key
+
+- [#1508](https://github.com/bcakmakoglu/vue-flow/pull/1508) [`005b25b`](https://github.com/bcakmakoglu/vue-flow/commit/005b25bd56789bfdcaa589025ff158fbeb719e01) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Use correct end handle position in connection line component and store handle positions during connections.
+
+- [#1502](https://github.com/bcakmakoglu/vue-flow/pull/1502) [`30c81dc`](https://github.com/bcakmakoglu/vue-flow/commit/30c81dccc840aa8441fb8b8dd3c38a4792719f04) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Allow passing a Record<string, any> as class to node/edge objects
+
+- [#1502](https://github.com/bcakmakoglu/vue-flow/pull/1502) [`30c81dc`](https://github.com/bcakmakoglu/vue-flow/commit/30c81dccc840aa8441fb8b8dd3c38a4792719f04) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Allow passing an array of strings as class to node/edge objects
+
+- [#1492](https://github.com/bcakmakoglu/vue-flow/pull/1492) [`2dff0dd`](https://github.com/bcakmakoglu/vue-flow/commit/2dff0dd85d2cb26f563c23a22a08b3d430309e74) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Make `useKeyPress` public and export it
+
+### Patch Changes
+
+- [#1506](https://github.com/bcakmakoglu/vue-flow/pull/1506) [`45e9d03`](https://github.com/bcakmakoglu/vue-flow/commit/45e9d0322d68d774346315ec87ad7d906bad7cf8) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Remove `v-memo` from EdgeRenderer so that edges get their correct z-index applied
+
+- [#1494](https://github.com/bcakmakoglu/vue-flow/pull/1494) [`09c32c5`](https://github.com/bcakmakoglu/vue-flow/commit/09c32c51b13d3188b3339dcb3eb985474fd770a1) Thanks [@bcakmakoglu](https://github.com/bcakmakoglu)! - Calculate correct handle position in handle lookup
+
 ## 1.37.1
 
 ### Patch Changes

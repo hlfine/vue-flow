@@ -2,23 +2,18 @@ import { ConnectionMode } from '../types'
 import type {
   Actions,
   Connection,
+  ConnectionHandle,
   ConnectionStatus,
-  Dimensions,
   GraphEdge,
   GraphNode,
   HandleType,
   NodeHandleBounds,
+  Position,
   ValidConnectionFunc,
   ValidHandleResult,
   XYPosition,
 } from '../types'
-import { getEventPosition } from '.'
-
-export interface ConnectionHandle extends XYPosition, Dimensions {
-  id: string | null
-  type: HandleType | null
-  nodeId: string
-}
+import { getEventPosition, getHandlePosition } from '.'
 
 function defaultValidHandleResult(): ValidHandleResult {
   return {
@@ -41,20 +36,23 @@ export function getHandles(
   type: HandleType,
   currentHandle: string,
 ): ConnectionHandle[] {
-  return (handleBounds[type] || []).reduce<ConnectionHandle[]>((res, h) => {
-    if (`${node.id}-${h.id}-${type}` !== currentHandle) {
-      res.push({
-        id: h.id || null,
+  const connectionHandles: ConnectionHandle[] = []
+
+  for (const handle of handleBounds[type] || []) {
+    if (`${node.id}-${handle.id}-${type}` !== currentHandle) {
+      const { x, y } = getHandlePosition(node, handle)
+
+      connectionHandles.push({
+        id: handle.id || null,
         type,
         nodeId: node.id,
-        x: (node.computedPosition?.x ?? 0) + h.x + h.width / 2,
-        y: (node.computedPosition?.y ?? 0) + h.y + h.height / 2,
-        width: h.width,
-        height: h.height,
+        x,
+        y,
       })
     }
-    return res
-  }, [])
+  }
+
+  return connectionHandles
 }
 
 export function getClosestHandle(
@@ -195,12 +193,6 @@ export function isValidHandle(
         ? (isTarget && handleType === 'source') || (!isTarget && handleType === 'target')
         : handleNodeId !== fromNodeId || handleId !== fromHandleId)
 
-    result.endHandle = {
-      nodeId: handleNodeId,
-      handleId,
-      type: handleType as HandleType,
-    }
-
     if (isValid) {
       result.isValid = isValidConnection(connection, {
         edges,
@@ -208,6 +200,13 @@ export function isValidHandle(
         sourceNode: findNode(connection.source)!,
         targetNode: findNode(connection.target)!,
       })
+
+      result.endHandle = {
+        nodeId: handleNodeId,
+        handleId,
+        type: handleType as HandleType,
+        position: result.isValid ? (handleToCheck.getAttribute('data-handlepos') as Position) : null,
+      }
     }
   }
 
